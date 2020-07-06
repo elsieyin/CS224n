@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-CS224N 2018-19: Homework 3
+CS224N 2019-20: Homework 3
 parser_transitions.py: Algorithms for completing partial parsess.
 Sahil Chopra <schopra8@stanford.edu>
+Haoshen Hong <haoshen@stanford.edu>
 """
 
 import sys
@@ -31,6 +32,11 @@ class PartialParse(object):
         ### Note: The root token should be represented with the string "ROOT"
         ###
 
+        self.stack = ['ROOT']
+        self.buffer = sentence.copy()
+        self.dependencies = []
+
+
 
         ### END YOUR CODE
 
@@ -50,6 +56,17 @@ class PartialParse(object):
         ###         2. Left Arc
         ###         3. Right Arc
 
+        if transition == 'S':
+            self.stack.append(self.buffer[0])
+            del self.buffer[0]
+        elif transition == 'LA':
+            assert len(self.stack) > 1
+            self.dependencies.append((self.stack[-1],self.stack[-2]))
+            del self.stack[-2]
+        elif transition == 'RA':
+            assert len(self.stack) > 1
+            self.dependencies.append((self.stack[-2],self.stack[-1]))
+            del self.stack[-1]
 
         ### END YOUR CODE
 
@@ -100,6 +117,21 @@ def minibatch_parse(sentences, model, batch_size):
     ###             contains references to the same objects. Thus, you should NOT use the `del` operator
     ###             to remove objects from the `unfinished_parses` list. This will free the underlying memory that
     ###             is being accessed by `partial_parses` and may cause your code to crash.
+
+    import math
+    for batch in range(int(math.ceil(len(sentences)/batch_size))):
+        start_idx = batch*batch_size
+        partialParses = [PartialParse(sentence) for sentence in sentences[start_idx:start_idx+batch_size]]
+        unfin_partialParses = partialParses
+        # 每个sentence，循环到停止条件为止
+        while len(unfin_partialParses) != 0:
+            transitions = model.predict(unfin_partialParses)
+            for idx, transition in enumerate(transitions):
+                unfin_partialParses[idx].parse([transition])
+            unfin_partialParses = list(filter(lambda p: len(p.stack) != 1, unfin_partialParses))
+
+        for p in partialParses:
+            dependencies.append(p.dependencies)
 
 
     ### END YOUR CODE
@@ -153,13 +185,30 @@ def test_parse():
 
 class DummyModel(object):
     """Dummy model for testing the minibatch_parse function
-    First shifts everything onto the stack and then does exclusively right arcs if the first word of
-    the sentence is "right", "left" if otherwise.
     """
+    def __init__(self, mode = "unidirectional"):
+        self.mode = mode
+
     def predict(self, partial_parses):
+        if self.mode == "unidirectional":
+            return self.unidirectional_predict(partial_parses)
+        elif self.mode == "interleave":
+            return self.interleave_predict(partial_parses)
+        else:
+            raise NotImplementedError()
+
+    def unidirectional_predict(self, partial_parses):
+        """First shifts everything onto the stack and then does exclusively right arcs if the first word of
+        the sentence is "right", "left" if otherwise.
+        """
         return [("RA" if pp.stack[1] is "right" else "LA") if len(pp.buffer) == 0 else "S"
                 for pp in partial_parses]
 
+    def interleave_predict(self, partial_parses):
+        """First shifts everything onto the stack and then interleaves "right" and "left".
+        """
+        return [("RA" if len(pp.stack) % 2 == 0 else "LA") if len(pp.buffer) == 0 else "S"
+                for pp in partial_parses]
 
 def test_dependencies(name, deps, ex_deps):
     """Tests the provided dependencies match the expected dependencies"""
@@ -172,6 +221,8 @@ def test_minibatch_parse():
     """Simple tests for the minibatch_parse function
     Warning: these are not exhaustive
     """
+
+    # Unidirectional arcs test
     sentences = [["right", "arcs", "only"],
                  ["right", "arcs", "only", "again"],
                  ["left", "arcs", "only"],
@@ -185,6 +236,18 @@ def test_minibatch_parse():
                       (('only', 'ROOT'), ('only', 'arcs'), ('only', 'left')))
     test_dependencies("minibatch_parse", deps[3],
                       (('again', 'ROOT'), ('again', 'arcs'), ('again', 'left'), ('again', 'only')))
+
+    # Out-of-bound test
+    sentences = [["right"]]
+    deps = minibatch_parse(sentences, DummyModel(), 2)
+    test_dependencies("minibatch_parse", deps[0], (('ROOT', 'right'),))
+
+    # Mixed arcs test
+    sentences = [["this", "is", "interleaving", "dependency", "test"]]
+    deps = minibatch_parse(sentences, DummyModel(mode="interleave"), 1)
+    test_dependencies("minibatch_parse", deps[0],
+                      (('ROOT', 'is'), ('dependency', 'interleaving'),
+                      ('dependency', 'test'), ('is', 'dependency'), ('is', 'this')))
     print("minibatch_parse test passed!")
 
 

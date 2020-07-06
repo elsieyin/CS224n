@@ -2,10 +2,11 @@
 # -*- coding: utf-8 -*-
 
 """
-CS224N 2018-19: Homework 4
+CS224N 2019-20: Homework 4
 run.py: Run Script for Simple NMT Model
 Pencheng Yin <pcyin@cs.cmu.edu>
 Sahil Chopra <schopra8@stanford.edu>
+Vera Lin <veralin@stanford.edu>
 
 Usage:
     run.py train --train-src=<file> --train-tgt=<file> --dev-src=<file> --dev-tgt=<file> --vocab=<file> [options]
@@ -106,6 +107,14 @@ def train(args: Dict):
     """ Train the NMT Model.
     @param args (Dict): args from cmd line
     """
+    # args = {
+    #     '--train-src':'./en_es_data/train.es',
+    #     '--train-tgt':'./en_es_data/train.en',
+    #     '--dev-src':'./en_es_data/dev.es',
+    #     '--dev-tgt':'./en_es_data/dev.en',
+    #     '--vocab':'vocab.json'
+    # }
+
     train_data_src = read_corpus(args['--train-src'], source='src')
     train_data_tgt = read_corpus(args['--train-tgt'], source='tgt')
 
@@ -319,10 +328,11 @@ def beam_search(model: NMT, test_data_src: List[List[str]], beam_size: int, max_
 def main():
     """ Main func.
     """
+
     args = docopt(__doc__)
 
     # Check pytorch version
-    assert(torch.__version__ == "1.0.0"), "Please update your installation of PyTorch. You have {} and you should have version 1.0.0".format(torch.__version__)
+    assert(torch.__version__ >= "1.0.0"), "Please update your installation of PyTorch. You have {} and you should have version 1.0.0".format(torch.__version__)
 
     # seed the random number generators
     seed = int(args['--seed'])
